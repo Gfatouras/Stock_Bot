@@ -27,13 +27,13 @@ GENERATE_NEW_MODEL = True
 NUM_EPISODES = 1000
 LR_ACTOR = 1e-5
 LR_CRITIC = 1e-5
-GAMMA = 0.97
+GAMMA = 0.99
 TAU = 0.005
 
 # Epsilon parameters (no longer used for action noise, but still kept if you wish to decay OU sigma)
 EPSILON = 1.0
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.995
+EPSILON_DECAY = 0.999
 
 # Data parameters
 TICKER = "AMZN"
@@ -44,7 +44,7 @@ BATCH_SIZE = 32
 MEMORY_SIZE = 10000
 
 # Global noise scale (for exploration) used as sigma for OU noise.
-NOISE_SCALE = 0.5
+NOISE_SCALE = 0.25
 
 # ------------------------------
 # Ornstein-Uhlenbeck Noise for Exploration
@@ -117,6 +117,7 @@ class Actor(nn.Module):
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.fc3 = nn.Linear(hidden_size, 1)  # output one continuous action
+
     def forward(self, state):
         x = torch.relu(self.fc1(state))
         x = torch.relu(self.fc2(x))
@@ -132,6 +133,7 @@ class Critic(nn.Module):
         self.fc1 = nn.Linear(state_size + 1, hidden_size)  # state and action
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.fc3 = nn.Linear(hidden_size, 1)
+
     def forward(self, state, action):
         x = torch.cat([state, action], dim=1)
         x = torch.relu(self.fc1(x))
@@ -343,9 +345,9 @@ class TradingEnvContinuous(gym.Env):
         return obs, reward, done, info
 
 # ------------------------------
-# Live Chart Update Function (Inverted Fill, Legend at Bottom Left)
+# Live Chart Update Function (with Episode Number)
 # ------------------------------
-def update_live_chart(time_steps, prices, portfolio_values, actions, cash, shares, ax):
+def update_live_chart(time_steps, prices, portfolio_values, actions, cash, shares, ax, episode):
     ax.clear()
     prices_arr = np.array(prices)
     n = len(prices_arr)
@@ -374,9 +376,11 @@ def update_live_chart(time_steps, prices, portfolio_values, actions, cash, share
     final_portfolio = total_portfolio[-1]
     portfolio_gain = ((final_portfolio - initial_cash) / initial_cash) * 100
     
-    ax.text(0.02, 0.95, f"Portfolio Gain: {portfolio_gain:.2f}%",
-            transform=ax.transAxes, fontsize=12, verticalalignment='top',
-            bbox=dict(facecolor='white', alpha=0.5))
+    ax.text(0.02, 0.95, f"Portfolio Gain: {portfolio_gain:.2f}%", transform=ax.transAxes,
+            fontsize=12, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
+    # Add current episode information
+    ax.text(0.02, 0.88, f"Episode: {episode}", transform=ax.transAxes,
+            fontsize=12, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
     
     ax.set_xlabel('Time Step')
     ax.set_ylabel('Value ($)')
@@ -399,7 +403,7 @@ def get_real_stock_data(ticker=TICKER, period=DATA_PERIOD, interval=DATA_INTERVA
 # ------------------------------
 if __name__ == '__main__':
     plt.ion()
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(8, 3))
     
     print(f"Downloading historical data for {TICKER} (period: {DATA_PERIOD}, interval: {DATA_INTERVAL})...")
     stock_data = get_real_stock_data()
@@ -476,7 +480,7 @@ if __name__ == '__main__':
             eval_actions.append(action_eval[0])
             state_eval, reward_eval, done_eval, info_eval = env.step(action_eval)
 
-        update_live_chart(eval_time_steps, eval_prices, eval_portfolio, eval_actions, eval_cash, eval_shares, ax)
+        update_live_chart(eval_time_steps, eval_prices, eval_portfolio, eval_actions, eval_cash, eval_shares, ax, episode+1)
         plt.draw()
         plt.pause(0.01)
 
